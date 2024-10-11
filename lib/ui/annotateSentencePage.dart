@@ -1,12 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:multiwordexpressionworkbench/ui/loginPage.dart';
 
 import '../models/annotation_model.dart';
 import '../models/project.dart';
 import '../models/sentence_model.dart';
 import '../services/annotationService.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 class AnnotateSentencePage extends StatefulWidget {
   final List<Sentence> sentences;
@@ -21,6 +22,7 @@ class AnnotateSentencePage extends StatefulWidget {
 
 class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   List<Annotation> annotationList = [];
+  Map<int, TextEditingController> annotationControllers = {}; // Add this map
   int selectedIndex = -1;
   TextEditingController? _controller;
   int currentPage = 0;
@@ -48,6 +50,9 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   @override
   void dispose() {
     _controller?.dispose();
+    for (var controller in annotationControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -99,7 +104,7 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   List<Sentence> getCurrentPageSentences() {
     final startIndex = currentPage * sentencesPerPage;
     final endIndex =
-    min(startIndex + sentencesPerPage, widget.sentences.length);
+        min(startIndex + sentencesPerPage, widget.sentences.length);
     return widget.sentences.getRange(startIndex, endIndex).toList();
   }
 
@@ -128,7 +133,7 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
       child: Column(
         children: [
           Container(
-            child: Row(
+            child: const Row(
               children: [
                 Text("Annotation Type"),
               ],
@@ -183,7 +188,7 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   Widget _buildAddButton() {
     return ElevatedButton(
       onPressed: _onAddButtonPressed,
-      child: Text("Add"),
+      child: const Text("Add"),
     );
   }
 
@@ -192,7 +197,8 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
       Annotation annotation = Annotation(
         wordPhrase: selectedText,
         annotation: _selectedValue!,
-        sentenceId: widget.sentences[selectedIndex+(currentPage * sentencesPerPage)].id,
+        sentenceId: widget
+            .sentences[selectedIndex + (currentPage * sentencesPerPage)].id,
         projectId: widget.project.id,
       );
       print(annotation.toJson());
@@ -202,13 +208,13 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please Select Annotation")),
+        const SnackBar(content: Text("Please Select Annotation")),
       );
     }
   }
 
   Widget _buildSelectTextPrompt() {
-    return Text(
+    return const Text(
       "Select at least two words to Annotate",
       style: TextStyle(fontWeight: FontWeight.bold),
     );
@@ -249,10 +255,37 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
 
   Widget _buildAnnotationListItem(int index) {
     final annotation = annotationList[index];
+
+    // Initialize the controller for each annotation if not already initialized
+    if (!annotationControllers.containsKey(index)) {
+      annotationControllers[index] =
+          TextEditingController(text: annotation.wordPhrase);
+    }
+
+    final annotationController = annotationControllers[index]!;
+
     return ListTile(
-      title: Text(
-        "${annotation.wordPhrase} : ${annotation.annotation}",
-        style: const TextStyle(fontWeight: FontWeight.bold),
+      title: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: annotationController,
+              decoration: const InputDecoration(
+                hintText: 'Edit annotation text',
+              ),
+              onChanged: (newValue) {
+                setState(() {
+                  annotationList[index].wordPhrase = newValue;
+                  unsavedChanges = true;
+                });
+              },
+            ),
+          ),
+          Text(
+            ": ${annotation.annotation}",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
       leading: Text(
         (index + 1).toString(),
@@ -294,7 +327,8 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
       setState(() {
         unsavedChanges = false;
         // Assuming annotationList[0] is not out of bounds; consider handling potential empty list or refactor logic accordingly.
-        widget.sentences[selectedIndex+(currentPage * sentencesPerPage)].isAnnotated = true;
+        widget.sentences[selectedIndex + (currentPage * sentencesPerPage)]
+            .isAnnotated = true;
         annotationList = [];
       });
     } else {
@@ -316,31 +350,31 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   }
 
   Widget _buildProjectHeader() => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [Text(widget.project.title), Text(widget.project.language)],
-  );
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [Text(widget.project.title), Text(widget.project.language)],
+      );
 
   Widget _buildSentenceList(List<Sentence> sentences) => Expanded(
-    child: ListView.builder(
-      itemCount: sentences.length,
-      itemBuilder: (context, index) {
-        return _buildSentenceTile(index, sentences);
-      },
-    ),
-  );
+        child: ListView.builder(
+          itemCount: sentences.length,
+          itemBuilder: (context, index) {
+            return _buildSentenceTile(index, sentences);
+          },
+        ),
+      );
 
   Widget _buildSentenceTile(int index, List<Sentence> sentences) {
     final isSelected = selectedIndex == index;
     final sentence = sentences[index];
     return ListTile(
       onTap: () async {
-        if (unsavedChanges)
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        if (unsavedChanges) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
                   "Please submit the annotations, before moving on to next sentence")));
-        else {
+        } else {
           List<Annotation> existingAnnotationList =
-          await annotationService.fetchAnnotations(sentence.id);
+              await annotationService.fetchAnnotations(sentence.id);
           print(existingAnnotationList);
           setState(() {
             selectedIndex = index;
@@ -352,9 +386,9 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
       },
       leading: sentence.isAnnotated == true
           ? const Icon(
-        Icons.done_outline_outlined,
-        color: Colors.green,
-      )
+              Icons.done_outline_outlined,
+              color: Colors.green,
+            )
           : null,
       title: Container(
         decoration: BoxDecoration(
@@ -366,66 +400,147 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
         height: 60,
         child: isSelected
             ? TextField(
-          decoration: const InputDecoration(border: InputBorder.none),
-          controller: _controller,
-          readOnly: true,
-          showCursor: false,
-          autofocus: true,
-        )
+                decoration: const InputDecoration(border: InputBorder.none),
+                controller: _controller,
+                readOnly: true,
+                showCursor: false,
+                autofocus: true,
+              )
             : Text(
-          sentence.content,
-          style: const TextStyle(fontSize: 16.5),
-        ),
+                sentence.content,
+                style: const TextStyle(fontSize: 16.5),
+              ),
       ),
       trailing: selectedIndex == index
           ? ElevatedButton(
-        onPressed: () {
-          _checkSelectedText(_controller!);
-        },
-        child: Text("Annotate"),
-      )
+              onPressed: () {
+                _checkSelectedText(_controller!);
+              },
+              child: const Text("Annotate"),
+            )
           : null,
     );
   }
 
   Widget _buildPaginationControls(int pages) => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: currentPage > 0
-            ? () => setState(() {
-          currentPage--;
-        })
-            : null,
-      ),
-      Text('Page ${currentPage + 1} of $pages'),
-      IconButton(
-        icon: const Icon(Icons.arrow_forward),
-        onPressed: currentPage < pages - 1
-            ? () => setState(() {
-          currentPage++;
-        })
-            : null,
-      ),
-    ],
-  );
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: currentPage > 0
+                ? () => setState(() {
+                      currentPage--;
+                    })
+                : null,
+          ),
+          Text('Page ${currentPage + 1} of $pages'),
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: currentPage < pages - 1
+                ? () => setState(() {
+                      currentPage++;
+                    })
+                : null,
+          ),
+        ],
+      );
+
+  void _handleLogout(BuildContext context) {
+    // Clear any existing user data if needed (optional)
+
+    // Navigate to the login page and remove all previous routes from the stack
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (Route<dynamic> route) => false, // This removes all previous routes
+    );
+  }
+
+  void _showPdf(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("PDF Content"),
+          content: SizedBox(
+            width: 1000,
+            height: 600,
+            child: PdfViewer.asset(
+                'assets/files/USER_Guidelines.pdf'), // Update path as necessary
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Close"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPDF(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("PDF Content"),
+          content: SizedBox(
+            width: 1000,
+            height: 600,
+            child: PdfViewer.asset(
+                'assets/files/annotation_guidelines.pdf'), // Update path as necessary
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Close"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   AppBar _buildAppBar() => AppBar(
-    leading: Image.asset("images/logo.png"),
-    toolbarHeight: 100,
-    leadingWidth: 300,
-    backgroundColor: Colors.blue[100],
-    title: const Align(
-      alignment: Alignment.center,
-      child: Text('Multiword Expression Workbench'),
-    ),
-    actions: [
-      Container(
-        margin: const EdgeInsets.all(20.0),
-        child:
-        ElevatedButton(onPressed: () {}, child: const Text("Log Out")),
-      ),
-    ],
-  );
+        leading: Image.asset("images/logo.png"),
+        toolbarHeight: 100,
+        leadingWidth: 300,
+        backgroundColor: Colors.blue[100],
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: () {
+                _showPdf(context);
+              },
+              child: const Text("Show User Guidelines"),
+            ),
+            const Spacer(),
+            const Text('Multiword Expression Workbench'),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: () {
+                _showPDF(context);
+              },
+              child: const Text("Show Annotation Guidelines"),
+            ),
+          ],
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.all(20.0),
+            child: ElevatedButton(
+              onPressed: () {
+                _handleLogout(context);
+              },
+              child: const Text("Log Out"),
+            ),
+          ),
+        ],
+      );
 }
