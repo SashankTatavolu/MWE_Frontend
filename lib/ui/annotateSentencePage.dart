@@ -366,20 +366,23 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
   Widget _buildSentenceTile(int index, List<Sentence> sentences) {
     final isSelected = selectedIndex == index;
     final sentence = sentences[index];
+
     return ListTile(
       onTap: () async {
         if (unsavedChanges) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(
-                  "Please submit the annotations, before moving on to next sentence")));
+                  "Please submit the annotations before moving on to the next sentence")));
         } else {
           List<Annotation> existingAnnotationList =
               await annotationService.fetchAnnotations(sentence.id);
           print(existingAnnotationList);
           setState(() {
-            selectedIndex = index;
+            selectedIndex = index; // Update the selected index
             isValidTextSelected = false;
-            _controller?.text = sentence.content;
+            // Update the controller only if the selected index changes
+            _controller?.text =
+                sentence.content; // Set the text for the current sentence
             annotationList = existingAnnotationList;
           });
         }
@@ -401,7 +404,8 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
         child: isSelected
             ? TextField(
                 decoration: const InputDecoration(border: InputBorder.none),
-                controller: _controller,
+                controller:
+                    _controller, // Link the controller to the selected text
                 readOnly: true,
                 showCursor: false,
                 autofocus: true,
@@ -416,7 +420,7 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
               onPressed: () {
                 _checkSelectedText(_controller!);
               },
-              child: const Text("Annotate"),
+              child: Text("Annotate"),
             )
           : null,
     );
@@ -430,6 +434,9 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
             onPressed: currentPage > 0
                 ? () => setState(() {
                       currentPage--;
+                      // Reset selectedIndex to -1 when changing pages
+                      selectedIndex = -1;
+                      _controller?.clear(); // Clear the controller
                     })
                 : null,
           ),
@@ -439,6 +446,8 @@ class _AnnotateSentencePageState extends State<AnnotateSentencePage> {
             onPressed: currentPage < pages - 1
                 ? () => setState(() {
                       currentPage++;
+                      selectedIndex = -1; // Reset selected index on page change
+                      _controller?.clear(); // Clear the controller
                     })
                 : null,
           ),
